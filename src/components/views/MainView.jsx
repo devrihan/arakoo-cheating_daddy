@@ -1,77 +1,111 @@
 import React, { useState, useEffect } from 'react';
+import { rendererService } from '../../utils/renderer';
 
-const AppHeader = ({ 
-  currentView, statusText, startTime, advancedMode,
-  onCustomizeClick, onHelpClick, onHistoryClick, 
-  onCloseClick, onBackClick, onAdvancedClick 
-}) => {
-  const [elapsed, setElapsed] = useState('');
+const MainView = ({ onStart }) => {
+  const [apiKey, setApiKey] = useState('');
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    let interval;
-    if (currentView === 'assistant' && startTime) {
-      interval = setInterval(() => {
-        const sec = Math.floor((Date.now() - startTime) / 1000);
-        setElapsed(`${sec}s`);
-      }, 1000);
+    const storedKey = localStorage.getItem('apiKey');
+    if (storedKey) setApiKey(storedKey);
+  }, []);
+
+  const handleStart = async () => {
+    if (!apiKey.trim()) {
+      setError('Please enter a valid Gemini API Key');
+      return;
     }
-    return () => clearInterval(interval);
-  }, [currentView, startTime]);
 
-  const getTitle = () => {
-    const titles = {
-      main: 'Cheating Daddy',
-      customize: 'Customize',
-      assistant: 'Cheating Daddy',
-    };
-    return titles[currentView] || 'Cheating Daddy';
-  };
+    setIsVerifying(true);
+    setError('');
 
-  const isNavView = ['customize', 'help', 'history', 'advanced'].includes(currentView);
-
-  const headerStyle = {
-    WebkitAppRegion: 'drag',
-    display: 'flex',
-    alignItems: 'center',
-    padding: 'var(--header-padding)',
-    border: '1px solid var(--border-color)',
-    background: 'var(--header-background)',
-    borderRadius: 'var(--border-radius)',
-    gap: '12px'
-  };
-
-  const iconButtonStyle = {
-    background: 'none',
-    color: 'var(--icon-button-color)',
-    border: 'none',
-    padding: '8px',
-    cursor: 'pointer',
-    fontSize: '16px'
+    try {
+      // Save key first
+      localStorage.setItem('apiKey', apiKey.trim());
+      
+      // Attempt to initialize
+      const profile = localStorage.getItem('selectedProfile') || 'interview';
+      const language = localStorage.getItem('selectedLanguage') || 'en-US';
+      
+      const success = await rendererService.initializeGemini(apiKey.trim(), profile, language);
+      
+      if (success) {
+        // Start capture loop automatically if configured
+        const interval = localStorage.getItem('selectedScreenshotInterval') || '5';
+        const quality = localStorage.getItem('selectedImageQuality') || 'medium';
+        
+        // Only start auto-capture if not manual
+        if (interval !== 'manual') {
+            await rendererService.startCapture(interval, quality);
+        }
+        
+        onStart(); // Navigate to Assistant View
+      } else {
+        setError('Failed to verify API Key. Please check your connection or key.');
+      }
+    } catch (err) {
+      console.error(err);
+      setError(err.message || 'An unexpected error occurred');
+    } finally {
+      setIsVerifying(false);
+    }
   };
 
   return (
-    <div style={headerStyle}>
-      <div style={{flex: 1, fontWeight: 600, WebkitAppRegion: 'drag'}}>
-        {getTitle()}
+    <div className="main-view-container" style={{ padding: '40px', textAlign: 'center', color: '#fff' }}>
+      <div style={{ marginBottom: '40px' }}>
+        <h1>Cheating Daddy</h1>
+        <p style={{ color: '#888' }}>Your Stealth AI Copilot</p>
       </div>
-      
-      <div style={{display: 'flex', gap: '12px', alignItems: 'center', WebkitAppRegion: 'no-drag'}}>
-        {currentView === 'main' && (
-          <>
-            <button className="icon-button" onClick={onHistoryClick} style={iconButtonStyle}>H</button>
-            <button className="icon-button" onClick={onCustomizeClick} style={iconButtonStyle}>S</button>
-          </>
-        )}
-        <button 
-          className="icon-button" 
-          onClick={isNavView ? onBackClick : onCloseClick}
-          style={iconButtonStyle}
+
+      <div className="input-group" style={{ maxWidth: '400px', margin: '0 auto', textAlign: 'left' }}>
+        <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '500' }}>
+          Gemini API Key
+        </label>
+        <input
+          type="password"
+          value={apiKey}
+          onChange={(e) => setApiKey(e.target.value)}
+          placeholder="Paste your API key here..."
+          style={{
+            width: '100%',
+            padding: '12px',
+            borderRadius: '6px',
+            border: '1px solid #333',
+            background: 'rgba(255,255,255,0.05)',
+            color: 'white',
+            marginBottom: '20px',
+            outline: 'none'
+          }}
+        />
+        
+        {error && <div style={{ color: '#ff4444', fontSize: '13px', marginBottom: '15px' }}>{error}</div>}
+
+        <button
+          onClick={handleStart}
+          disabled={isVerifying}
+          style={{
+            width: '100%',
+            padding: '12px',
+            borderRadius: '6px',
+            border: 'none',
+            background: isVerifying ? '#333' : '#007aff',
+            color: 'white',
+            fontWeight: '600',
+            cursor: isVerifying ? 'default' : 'pointer',
+            opacity: isVerifying ? 0.7 : 1
+          }}
         >
-          X
+          {isVerifying ? 'Verifying...' : 'Start Session'}
         </button>
+
+        <p style={{ marginTop: '20px', fontSize: '12px', color: '#666', textAlign: 'center' }}>
+          Don't have a key? <a href="#" onClick={() => window.open('https://aistudio.google.com/app/apikey')} style={{ color: '#007aff' }}>Get one from Google AI Studio</a>
+        </p>
       </div>
     </div>
   );
 };
 
-export default AppHeader;
+export default MainView;
