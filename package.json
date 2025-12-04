@@ -27,6 +27,7 @@
   "dependencies": {
     "@google/genai": "^1.2.0",
     "electron-squirrel-startup": "^1.0.1",
+    "marked": "^12.0.2",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },

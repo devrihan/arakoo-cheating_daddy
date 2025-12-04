@@ -4,13 +4,11 @@ const OnboardingView = ({ onComplete }) => {
   const canvasRef = useRef(null);
   const [step, setStep] = useState(0);
 
-  // Gradient Animation Logic
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     
-    // Resize handler
     const resize = () => {
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
@@ -18,15 +16,13 @@ const OnboardingView = ({ onComplete }) => {
     window.addEventListener('resize', resize);
     resize();
 
-    // Animation vars
     let t = 0;
     let animationId;
     
-    // Distinct color palettes for steps
     const palettes = [
-        [[20,20,30], [40,30,50]], // Step 0: Purple Dark
-        [[10,20,30], [20,40,60]], // Step 1: Blue Dark
-        [[20,30,20], [30,50,30]], // Step 2: Green Dark
+        [[20,20,30], [40,30,50]], 
+        [[10,20,30], [20,40,60]], 
+        [[20,30,20], [30,50,30]], 
     ];
     const currentPalette = palettes[step % palettes.length];
 

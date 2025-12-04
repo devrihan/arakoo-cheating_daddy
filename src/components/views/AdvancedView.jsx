@@ -26,7 +26,6 @@ const AdvancedView = () => {
   const handleClearData = async () => {
     if (confirm('Are you sure? This will delete all settings and history.')) {
       localStorage.clear();
-      // indexedDB clearing would happen in rendererService if exposed, or reload
       if (window.require) {
          window.require('electron').ipcRenderer.send('clear-sensitive-data');
       }
@@ -56,7 +55,6 @@ const AdvancedView = () => {
         </div>
       </div>
 
-      {/* Data Management */}
       <div style={{ ...cardStyle, borderColor: '#ef4444', background: 'rgba(239, 68, 68, 0.05)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
            <span style={{ fontSize: '18px' }}>🗑️</span>

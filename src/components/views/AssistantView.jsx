@@ -1,7 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { rendererService } from '../../utils/renderer';
 import { marked } from 'marked'; 
-// Ensure marked is installed: npm install marked
 
 const AssistantView = () => {
   const [responses, setResponses] = useState([]);
@@ -9,13 +8,12 @@ const AssistantView = () => {
   const [inputText, setInputText] = useState('');
   const bottomRef = useRef(null);
 
-  // Listen for new AI responses
   useEffect(() => {
     const handleNewResponse = (e) => {
       const response = e.detail;
       setResponses(prev => {
         const newResponses = [...prev, response];
-        setCurrentIndex(newResponses.length - 1); // Auto-jump to new
+        setCurrentIndex(newResponses.length - 1); 
         return newResponses;
       });
     };
@@ -24,7 +22,6 @@ const AssistantView = () => {
     return () => window.removeEventListener('new-response', handleNewResponse);
   }, []);
 
-  // Auto-scroll to bottom on new message
   useEffect(() => {
     if (currentIndex === responses.length - 1) {
       bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -34,8 +31,6 @@ const AssistantView = () => {
   const handleSend = async () => {
     if (!inputText.trim()) return;
     
-    // Optimistically add user message (optional, or wait for echo)
-    // Here we just send it to backend
     await rendererService.sendTextMessage(inputText);
     setInputText('');
   };
@@ -52,7 +47,6 @@ const AssistantView = () => {
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', color: '#e5e5e5' }}>
       
-      {/* Response Area */}
       <div className="response-container" style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
         <div 
           className="markdown-content"
@@ -62,10 +56,8 @@ const AssistantView = () => {
         <div ref={bottomRef} />
       </div>
 
-      {/* Controls Area */}
       <div className="input-area" style={{ padding: '10px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
         
-        {/* Navigation Controls */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
            <div style={{ display: 'flex', gap: '8px' }}>
              <button 
@@ -95,7 +87,6 @@ const AssistantView = () => {
            </button>
         </div>
 
-        {/* Text Input */}
         <div style={{ display: 'flex', gap: '8px' }}>
           <input
             type="text"

@@ -23,14 +23,12 @@ const AppHeader = ({
       main: 'Cheating Daddy',
       customize: 'Customize',
       assistant: 'Cheating Daddy',
-      // Add others...
     };
     return titles[currentView] || 'Cheating Daddy';
   };
 
   const isNavView = ['customize', 'help', 'history', 'advanced'].includes(currentView);
 
-  // Styles object for the header container
   const headerStyle = {
     WebkitAppRegion: 'drag',
     display: 'flex',
@@ -59,11 +57,9 @@ const AppHeader = ({
         {currentView === 'main' && (
           <>
             <button className="icon-button" onClick={onHistoryClick} style={iconButtonStyle}>
-              {/* SVG for History */}
               H
             </button>
             <button className="icon-button" onClick={onCustomizeClick} style={iconButtonStyle}>
-              {/* SVG for Settings */}
               S
             </button>
           </>

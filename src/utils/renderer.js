@@ -4,16 +4,19 @@
 // 1. IPC & Environment Setup
 // ----------------------------------------------------------------------
 
-// Safe access to Electron's IPC renderer
-const { ipcRenderer } = window.require
-    ? window.require('electron')
+// Safe access to Electron's IPC renderer and OS module
+const electron = window.require ? window.require('electron') : null;
+const os = window.require ? window.require('os') : null;
+
+const ipcRenderer = electron
+    ? electron.ipcRenderer
     : {
           invoke: () => Promise.resolve({ success: false, error: 'Not in Electron' }),
           on: () => {},
           removeAllListeners: () => {},
       };
 
-// Initialize random display name for UI components (Optional, kept from original)
+// Initialize random display name for UI components
 window.randomDisplayName = null;
 ipcRenderer
     .invoke('get-random-display-name')
@@ -47,8 +50,11 @@ let offscreenCanvas = null;
 let offscreenContext = null;
 let currentImageQuality = 'medium';
 
-const isLinux = navigator.userAgent.indexOf('Linux') !== -1; // Basic detection
-const isMacOS = navigator.userAgent.indexOf('Mac') !== -1;
+// ROBUST PLATFORM DETECTION
+// usage of os.platform() is much safer than navigator.userAgent
+const platform = os ? os.platform() : 'unknown';
+const isMacOS = platform === 'darwin';
+const isLinux = platform === 'linux';
 
 // ----------------------------------------------------------------------
 // 3. Helper Functions
@@ -251,7 +257,7 @@ async function startCaptureInternal(screenshotIntervalSeconds = 5, imageQuality 
                     audio: {
                         sampleRate: SAMPLE_RATE,
                         channelCount: 1,
-                        echoCancellation: isLinux ? false : true, // Windows usually needs true for loopback
+                        echoCancellation: isLinux ? false : true, // Windows needs true for loopback
                         autoGainControl: true,
                     },
                 });

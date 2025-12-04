@@ -13,8 +13,10 @@ let isInitializingSession = false;
 function formatSpeakerResults(results) {
     let text = '';
     for (const result of results) {
-        if (result.transcript && result.speakerId) {
-            const speakerLabel = result.speakerId === 1 ? 'Interviewer' : 'Candidate';
+        if (result.transcript) {
+            // Speaker ID might not be available or reliable in all API versions
+            // We'll use a generic label if speakerId is missing
+            const speakerLabel = result.speakerId ? (result.speakerId === 1 ? 'Interviewer' : 'Candidate') : 'Speaker';
             text += `[${speakerLabel}]: ${result.transcript}\n`;
         }
     }
@@ -248,7 +250,7 @@ async function initializeGeminiSession(apiKey, customPrompt = '', profile = 'int
                     sendToRenderer('update-status', 'Live session connected');
                 },
                 onmessage: function (message) {
-                    console.log('----------------', message);
+                    // console.log('----------------', message); // Reduce log noise
 
                     if (message.serverContent?.inputTranscription?.results) {
                         currentTranscription += formatSpeakerResults(message.serverContent.inputTranscription.results);
@@ -257,7 +259,7 @@ async function initializeGeminiSession(apiKey, customPrompt = '', profile = 'int
                     // Handle AI model response
                     if (message.serverContent?.modelTurn?.parts) {
                         for (const part of message.serverContent.modelTurn.parts) {
-                            console.log(part);
+                            // console.log(part); // Reduce log noise
                             if (part.text) {
                                 messageBuffer += part.text;
                                 sendToRenderer('update-response', messageBuffer);
@@ -333,12 +335,10 @@ async function initializeGeminiSession(apiKey, customPrompt = '', profile = 'int
             config: {
                 responseModalities: ['TEXT'],
                 tools: enabledTools,
-                // Enable speaker diarization
-                inputAudioTranscription: {
-                    enableSpeakerDiarization: true,
-                    minSpeakerCount: 2,
-                    maxSpeakerCount: 2,
-                },
+                // FIXED: Simplified inputAudioTranscription
+                // The API does not currently support explicit diarization config here
+                // Passing an empty object enables default transcription
+                inputAudioTranscription: {},
                 contextWindowCompression: { slidingWindow: {} },
                 speechConfig: { languageCode: language },
                 systemInstruction: {

@@ -7,7 +7,6 @@ const CustomizeView = () => {
   const [audioMode, setAudioMode] = useState(localStorage.getItem('audioMode') || 'speaker_only');
   const [googleSearch, setGoogleSearch] = useState(localStorage.getItem('googleSearchEnabled') === 'true');
 
-  // Handle changes immediately (auto-save behavior)
   const updateSetting = (key, value, setter) => {
     localStorage.setItem(key, value);
     setter(value);
@@ -16,7 +15,6 @@ const CustomizeView = () => {
   const handleGoogleSearch = (e) => {
     const val = e.target.checked;
     updateSetting('googleSearchEnabled', val.toString(), setGoogleSearch);
-    // Notify main process if needed
     if (window.require) {
         window.require('electron').ipcRenderer.invoke('update-google-search-setting', val);
     }
@@ -26,7 +24,6 @@ const CustomizeView = () => {
     <div style={{ padding: '20px', color: '#e5e5e5', overflowY: 'auto', height: '100%' }}>
       <h2 style={{ fontSize: '18px', borderBottom: '1px solid #333', paddingBottom: '10px' }}>Settings</h2>
 
-      {/* Profile Section */}
       <section style={{ marginBottom: '24px' }}>
         <h3 style={{ fontSize: '14px', color: '#007aff', textTransform: 'uppercase' }}>AI Profile</h3>
         
@@ -56,7 +53,6 @@ const CustomizeView = () => {
         </div>
       </section>
 
-      {/* Audio Section */}
       <section style={{ marginBottom: '24px' }}>
         <h3 style={{ fontSize: '14px', color: '#007aff', textTransform: 'uppercase' }}>Audio & Language</h3>
         
@@ -85,12 +81,10 @@ const CustomizeView = () => {
             <option value="fr-FR">French</option>
             <option value="de-DE">German</option>
             <option value="hi-IN">Hindi</option>
-            {/* Add other languages as needed */}
           </select>
         </div>
       </section>
 
-      {/* Features */}
       <section>
         <h3 style={{ fontSize: '14px', color: '#007aff', textTransform: 'uppercase' }}>Features</h3>
         

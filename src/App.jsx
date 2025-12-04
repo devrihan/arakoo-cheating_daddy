@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import AppHeader from './components/AppHeader';
 import MainView from './components/views/MainView';
 import AssistantView from './components/views/AssistantView';
@@ -7,6 +7,7 @@ import AdvancedView from './components/views/AdvancedView';
 import HistoryView from './components/views/HistoryView';
 import HelpView from './components/views/HelpView';
 import OnboardingView from './components/views/OnboardingView';
+import { rendererService } from './utils/renderer';
 
 const App = () => {
   // State
@@ -14,8 +15,85 @@ const App = () => {
   const [statusText, setStatusText] = useState('Idle');
   const [startTime, setStartTime] = useState(null);
   const [advancedMode, setAdvancedMode] = useState(false);
+  const [apiKey, setApiKey] = useState(localStorage.getItem('apiKey') || '');
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [startError, setStartError] = useState('');
 
-  // Initialize state from local storage
+  const currentViewRef = useRef(currentView);
+  const apiKeyRef = useRef(apiKey);
+  
+  useEffect(() => {
+    currentViewRef.current = currentView;
+  }, [currentView]);
+
+  useEffect(() => {
+    apiKeyRef.current = apiKey;
+  }, [apiKey]);
+
+  const handleSessionStart = async () => {
+    const keyToUse = apiKeyRef.current;
+    
+    if (!keyToUse.trim()) {
+      setStartError('Please enter a valid Gemini API Key');
+      return;
+    }
+
+    setIsVerifying(true);
+    setStartError('');
+
+    try {
+      localStorage.setItem('apiKey', keyToUse.trim());
+      
+      const profile = localStorage.getItem('selectedProfile') || 'interview';
+      const language = localStorage.getItem('selectedLanguage') || 'en-US';
+      
+      const success = await rendererService.initializeGemini(keyToUse.trim(), profile, language);
+      
+      if (success) {
+        const interval = localStorage.getItem('selectedScreenshotInterval') || '5';
+        const quality = localStorage.getItem('selectedImageQuality') || 'medium';
+        
+        if (interval !== 'manual') {
+            await rendererService.startCapture(interval, quality);
+        }
+        
+        setStartTime(Date.now());
+        setCurrentView('assistant');
+      } else {
+        setStartError('Failed to verify API Key. Check connection/key.');
+      }
+    } catch (err) {
+      console.error(err);
+      setStartError(err.message || 'Unexpected error');
+    } finally {
+      setIsVerifying(false);
+    }
+  };
+
+  useEffect(() => {
+    window.cheddar = {
+      getContentProtection: () => {
+        return localStorage.getItem('contentProtection') !== 'false';
+      },
+      getCurrentView: () => {
+        return currentViewRef.current;
+      },
+      getLayoutMode: () => {
+        return localStorage.getItem('layoutMode') || 'normal';
+      },
+      handleShortcut: (key) => {
+        console.log('Shortcut triggered:', key);
+        const view = currentViewRef.current;
+
+        if (view === 'main') {
+          handleSessionStart();
+        } else if (view === 'assistant') {
+          rendererService.captureManualScreenshot();
+        }
+      }
+    };
+  }, []); 
+
   useEffect(() => {
     const isOnboarded = localStorage.getItem('onboardingCompleted') === 'true';
     setCurrentView(isOnboarded ? 'main' : 'onboarding');
@@ -24,12 +102,9 @@ const App = () => {
     setAdvancedMode(isAdvanced);
   }, []);
 
-  // Listen for Global Status Updates from Renderer
   useEffect(() => {
     const handleStatusUpdate = (e) => {
       setStatusText(e.detail);
-      
-      // If we go live, set the start time for the timer
       if (e.detail === 'Live' && !startTime) {
         setStartTime(Date.now());
       }
@@ -39,20 +114,11 @@ const App = () => {
     return () => window.removeEventListener('status-update', handleStatusUpdate);
   }, [startTime]);
 
-  // Handler: Start Session
-  // This is passed to MainView to trigger the transition
-  const handleSessionStart = () => {
-    setStartTime(Date.now());
-    setCurrentView('assistant');
-  };
-
-  // Handler: Onboarding Complete
   const handleOnboardingComplete = () => {
     localStorage.setItem('onboardingCompleted', 'true');
     setCurrentView('main');
   };
 
-  // Handler: Quit App
   const handleClose = async () => {
     if (window.require) {
       await window.require('electron').ipcRenderer.invoke('quit-application');
@@ -61,13 +127,20 @@ const App = () => {
     }
   };
 
-  // View Routing Logic
   const renderView = () => {
     switch (currentView) {
       case 'onboarding':
         return <OnboardingView onComplete={handleOnboardingComplete} />;
       case 'main':
-        return <MainView onStart={handleSessionStart} />;
+        return (
+          <MainView 
+            apiKey={apiKey}
+            setApiKey={setApiKey}
+            onStart={handleSessionStart}
+            isVerifying={isVerifying}
+            error={startError}
+          />
+        );
       case 'assistant':
         return <AssistantView />;
       case 'customize':
@@ -83,18 +156,16 @@ const App = () => {
     }
   };
 
-  // Special case: Onboarding takes over the whole screen (no header)
   if (currentView === 'onboarding') {
     return renderView();
   }
 
-  // Common Layout
   return (
     <div className="window-container" style={{
       height: '100vh', 
       display: 'flex',
       flexDirection: 'column',
-      background: 'transparent', // Let specific views handle background or use global CSS
+      background: 'transparent',
       overflow: 'hidden'
     }}>
       <div className="container" style={{
@@ -112,11 +183,10 @@ const App = () => {
           statusText={statusText}
           startTime={startTime}
           advancedMode={advancedMode}
-          // Navigation Props
           onCustomizeClick={() => setCurrentView('customize')}
           onHelpClick={() => setCurrentView('help')}
           onHistoryClick={() => setCurrentView('history')}
-          onAdvancedClick={() => setCurrentView('advanced')} // Only if advanced mode is true
+          onAdvancedClick={() => setCurrentView('advanced')}
           onBackClick={() => setCurrentView('main')}
           onCloseClick={handleClose}
         />

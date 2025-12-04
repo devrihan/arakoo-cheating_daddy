@@ -1,57 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { rendererService } from '../../utils/renderer';
+import React from 'react';
 
-const MainView = ({ onStart }) => {
-  const [apiKey, setApiKey] = useState('');
-  const [isVerifying, setIsVerifying] = useState(false);
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    const storedKey = localStorage.getItem('apiKey');
-    if (storedKey) setApiKey(storedKey);
-  }, []);
-
-  const handleStart = async () => {
-    if (!apiKey.trim()) {
-      setError('Please enter a valid Gemini API Key');
-      return;
-    }
-
-    setIsVerifying(true);
-    setError('');
-
-    try {
-      // Save key first
-      localStorage.setItem('apiKey', apiKey.trim());
-      
-      // Attempt to initialize
-      const profile = localStorage.getItem('selectedProfile') || 'interview';
-      const language = localStorage.getItem('selectedLanguage') || 'en-US';
-      
-      const success = await rendererService.initializeGemini(apiKey.trim(), profile, language);
-      
-      if (success) {
-        // Start capture loop automatically if configured
-        const interval = localStorage.getItem('selectedScreenshotInterval') || '5';
-        const quality = localStorage.getItem('selectedImageQuality') || 'medium';
-        
-        // Only start auto-capture if not manual
-        if (interval !== 'manual') {
-            await rendererService.startCapture(interval, quality);
-        }
-        
-        onStart(); // Navigate to Assistant View
-      } else {
-        setError('Failed to verify API Key. Please check your connection or key.');
-      }
-    } catch (err) {
-      console.error(err);
-      setError(err.message || 'An unexpected error occurred');
-    } finally {
-      setIsVerifying(false);
-    }
-  };
-
+const MainView = ({ apiKey, setApiKey, onStart, isVerifying, error }) => {
+  
   return (
     <div className="main-view-container" style={{ padding: '40px', textAlign: 'center', color: '#fff' }}>
       <div style={{ marginBottom: '40px' }}>
@@ -83,7 +33,7 @@ const MainView = ({ onStart }) => {
         {error && <div style={{ color: '#ff4444', fontSize: '13px', marginBottom: '15px' }}>{error}</div>}
 
         <button
-          onClick={handleStart}
+          onClick={onStart}
           disabled={isVerifying}
           style={{
             width: '100%',
