@@ -4,7 +4,6 @@ const { spawn } = require('child_process');
 const { saveDebugAudio } = require('../audioUtils');
 const { getSystemPrompt } = require('./prompts');
 
-// Conversation tracking variables
 let currentSessionId = null;
 let currentTranscription = '';
 let conversationHistory = [];
@@ -14,8 +13,6 @@ function formatSpeakerResults(results) {
     let text = '';
     for (const result of results) {
         if (result.transcript) {
-            // Speaker ID might not be available or reliable in all API versions
-            // We'll use a generic label if speakerId is missing
             const speakerLabel = result.speakerId ? (result.speakerId === 1 ? 'Interviewer' : 'Candidate') : 'Speaker';
             text += `[${speakerLabel}]: ${result.transcript}\n`;
         }
@@ -25,14 +22,12 @@ function formatSpeakerResults(results) {
 
 module.exports.formatSpeakerResults = formatSpeakerResults;
 
-// Audio capture variables
 let systemAudioProc = null;
 let messageBuffer = '';
 
-// Reconnection tracking variables
 let reconnectionAttempts = 0;
 let maxReconnectionAttempts = 3;
-let reconnectionDelay = 2000; // 2 seconds between attempts
+let reconnectionDelay = 2000;
 let lastSessionParams = null;
 
 function sendToRenderer(channel, data) {
@@ -42,7 +37,6 @@ function sendToRenderer(channel, data) {
     }
 }
 
-// Conversation management functions
 function initializeNewSession() {
     currentSessionId = Date.now().toString();
     currentTranscription = '';
@@ -64,7 +58,6 @@ function saveConversationTurn(transcription, aiResponse) {
     conversationHistory.push(conversationTurn);
     console.log('Saved conversation turn:', conversationTurn);
 
-    // Send to renderer to save in IndexedDB
     sendToRenderer('save-conversation-turn', {
         sessionId: currentSessionId,
         turn: conversationTurn,
@@ -85,7 +78,6 @@ async function sendReconnectionContext() {
     }
 
     try {
-        // Gather all transcriptions from the conversation history
         const transcriptions = conversationHistory
             .map(turn => turn.transcription)
             .filter(transcription => transcription && transcription.trim().length > 0);
@@ -94,14 +86,12 @@ async function sendReconnectionContext() {
             return;
         }
 
-        // Create the context message
         const contextMessage = `Till now all these questions were asked in the interview, answer the last one please:\n\n${transcriptions.join(
             '\n'
         )}`;
 
         console.log('Sending reconnection context with', transcriptions.length, 'previous questions');
 
-        // Send the context message to the new session
         await global.geminiSessionRef.current.sendRealtimeInput({
             text: contextMessage,
         });
@@ -113,7 +103,6 @@ async function sendReconnectionContext() {
 async function getEnabledTools() {
     const tools = [];
 
-    // Check if Google Search is enabled (default: true)
     const googleSearchEnabled = await getStoredSetting('googleSearchEnabled', 'true');
     console.log('Google Search enabled:', googleSearchEnabled);
 
@@ -131,10 +120,8 @@ async function getStoredSetting(key, defaultValue) {
     try {
         const windows = BrowserWindow.getAllWindows();
         if (windows.length > 0) {
-            // Wait a bit for the renderer to be ready
             await new Promise(resolve => setTimeout(resolve, 100));
 
-            // Try to get setting from renderer process localStorage
             const value = await windows[0].webContents.executeJavaScript(`
                 (function() {
                     try {
@@ -179,15 +166,14 @@ async function attemptReconnection() {
             lastSessionParams.customPrompt,
             lastSessionParams.profile,
             lastSessionParams.language,
-            true // isReconnection flag
+            true
         );
 
         if (session && global.geminiSessionRef) {
             global.geminiSessionRef.current = session;
-            reconnectionAttempts = 0; // Reset counter on successful reconnection
+            reconnectionAttempts = 0;
             console.log('Live session reconnected');
 
-            // Send context message with previous transcriptions
             await sendReconnectionContext();
 
             return true;
@@ -196,7 +182,6 @@ async function attemptReconnection() {
         console.error(`Reconnection attempt ${reconnectionAttempts} failed:`, error);
     }
 
-    // If this attempt failed, try again
     if (reconnectionAttempts < maxReconnectionAttempts) {
         return attemptReconnection();
     } else {
@@ -215,7 +200,6 @@ async function initializeGeminiSession(apiKey, customPrompt = '', profile = 'int
     isInitializingSession = true;
     sendToRenderer('session-initializing', true);
 
-    // Store session parameters for reconnection (only if not already reconnecting)
     if (!isReconnection) {
         lastSessionParams = {
             apiKey,
@@ -223,7 +207,7 @@ async function initializeGeminiSession(apiKey, customPrompt = '', profile = 'int
             profile,
             language,
         };
-        reconnectionAttempts = 0; // Reset counter for new session
+        reconnectionAttempts = 0;
     }
 
     const client = new GoogleGenAI({
@@ -231,13 +215,11 @@ async function initializeGeminiSession(apiKey, customPrompt = '', profile = 'int
         apiKey: apiKey,
     });
 
-    // Get enabled tools first to determine Google Search status
     const enabledTools = await getEnabledTools();
     const googleSearchEnabled = enabledTools.some(tool => tool.googleSearch);
 
     const systemPrompt = getSystemPrompt(profile, customPrompt, googleSearchEnabled);
 
-    // Initialize new conversation session (only if not reconnecting)
     if (!isReconnection) {
         initializeNewSession();
     }
@@ -250,16 +232,12 @@ async function initializeGeminiSession(apiKey, customPrompt = '', profile = 'int
                     sendToRenderer('update-status', 'Live session connected');
                 },
                 onmessage: function (message) {
-                    // console.log('----------------', message); // Reduce log noise
-
                     if (message.serverContent?.inputTranscription?.results) {
                         currentTranscription += formatSpeakerResults(message.serverContent.inputTranscription.results);
                     }
 
-                    // Handle AI model response
                     if (message.serverContent?.modelTurn?.parts) {
                         for (const part of message.serverContent.modelTurn.parts) {
-                            // console.log(part); // Reduce log noise
                             if (part.text) {
                                 messageBuffer += part.text;
                                 sendToRenderer('update-response', messageBuffer);
@@ -270,10 +248,9 @@ async function initializeGeminiSession(apiKey, customPrompt = '', profile = 'int
                     if (message.serverContent?.generationComplete) {
                         sendToRenderer('update-response', messageBuffer);
 
-                        // Save conversation turn when we have both transcription and AI response
                         if (currentTranscription && messageBuffer) {
                             saveConversationTurn(currentTranscription, messageBuffer);
-                            currentTranscription = ''; // Reset for next turn
+                            currentTranscription = '';
                         }
 
                         messageBuffer = '';
@@ -286,7 +263,6 @@ async function initializeGeminiSession(apiKey, customPrompt = '', profile = 'int
                 onerror: function (e) {
                     console.debug('Error:', e.message);
 
-                    // Check if the error is related to invalid API key
                     const isApiKeyError =
                         e.message &&
                         (e.message.includes('API key not valid') ||
@@ -296,8 +272,8 @@ async function initializeGeminiSession(apiKey, customPrompt = '', profile = 'int
 
                     if (isApiKeyError) {
                         console.log('Error due to invalid API key - stopping reconnection attempts');
-                        lastSessionParams = null; // Clear session params to prevent reconnection
-                        reconnectionAttempts = maxReconnectionAttempts; // Stop further attempts
+                        lastSessionParams = null;
+                        reconnectionAttempts = maxReconnectionAttempts;
                         sendToRenderer('update-status', 'Error: Invalid API key');
                         return;
                     }
@@ -307,7 +283,6 @@ async function initializeGeminiSession(apiKey, customPrompt = '', profile = 'int
                 onclose: function (e) {
                     console.debug('Session closed:', e.reason);
 
-                    // Check if the session closed due to invalid API key
                     const isApiKeyError =
                         e.reason &&
                         (e.reason.includes('API key not valid') ||
@@ -317,13 +292,12 @@ async function initializeGeminiSession(apiKey, customPrompt = '', profile = 'int
 
                     if (isApiKeyError) {
                         console.log('Session closed due to invalid API key - stopping reconnection attempts');
-                        lastSessionParams = null; // Clear session params to prevent reconnection
-                        reconnectionAttempts = maxReconnectionAttempts; // Stop further attempts
+                        lastSessionParams = null;
+                        reconnectionAttempts = maxReconnectionAttempts;
                         sendToRenderer('update-status', 'Session closed: Invalid API key');
                         return;
                     }
 
-                    // Attempt automatic reconnection for server-side closures
                     if (lastSessionParams && reconnectionAttempts < maxReconnectionAttempts) {
                         console.log('Attempting automatic reconnection...');
                         attemptReconnection();
@@ -335,9 +309,6 @@ async function initializeGeminiSession(apiKey, customPrompt = '', profile = 'int
             config: {
                 responseModalities: ['TEXT'],
                 tools: enabledTools,
-                // FIXED: Simplified inputAudioTranscription
-                // The API does not currently support explicit diarization config here
-                // Passing an empty object enables default transcription
                 inputAudioTranscription: {},
                 contextWindowCompression: { slidingWindow: {} },
                 speechConfig: { languageCode: language },
@@ -362,7 +333,6 @@ function killExistingSystemAudioDump() {
     return new Promise(resolve => {
         console.log('Checking for existing SystemAudioDump processes...');
 
-        // Kill any existing SystemAudioDump processes
         const killProc = spawn('pkill', ['-f', 'SystemAudioDump'], {
             stdio: 'ignore',
         });
@@ -381,7 +351,6 @@ function killExistingSystemAudioDump() {
             resolve();
         });
 
-        // Timeout after 2 seconds
         setTimeout(() => {
             killProc.kill();
             resolve();
@@ -392,7 +361,6 @@ function killExistingSystemAudioDump() {
 async function startMacOSAudioCapture(geminiSessionRef) {
     if (process.platform !== 'darwin') return false;
 
-    // Kill any existing SystemAudioDump processes first
     await killExistingSystemAudioDump();
 
     console.log('Starting macOS audio capture with SystemAudioDump...');
@@ -409,18 +377,15 @@ async function startMacOSAudioCapture(geminiSessionRef) {
 
     console.log('SystemAudioDump path:', systemAudioPath);
 
-    // Spawn SystemAudioDump with stealth options
     const spawnOptions = {
         stdio: ['ignore', 'pipe', 'pipe'],
         env: {
             ...process.env,
-            // Set environment variables that might help with stealth
             PROCESS_NAME: 'AudioService',
             APP_NAME: 'System Audio Service',
         },
     };
 
-    // On macOS, apply additional stealth measures
     if (process.platform === 'darwin') {
         spawnOptions.detached = false;
         spawnOptions.windowsHide = false;
@@ -520,7 +485,6 @@ async function sendAudioToGemini(base64Data, geminiSessionRef) {
 }
 
 function setupGeminiIpcHandlers(geminiSessionRef) {
-    // Store the geminiSessionRef globally for reconnection access
     global.geminiSessionRef = geminiSessionRef;
 
     ipcMain.handle('initialize-gemini', async (event, apiKey, customPrompt, profile = 'interview', language = 'en-US') => {
@@ -546,7 +510,6 @@ function setupGeminiIpcHandlers(geminiSessionRef) {
         }
     });
 
-    // Handle microphone audio on a separate channel
     ipcMain.handle('send-mic-audio-content', async (event, { data, mimeType }) => {
         if (!geminiSessionRef.current) return { success: false, error: 'No active Gemini session' };
         try {
@@ -637,10 +600,8 @@ function setupGeminiIpcHandlers(geminiSessionRef) {
         try {
             stopMacOSAudioCapture();
 
-            // Clear session params to prevent reconnection when user closes session
             lastSessionParams = null;
 
-            // Cleanup any pending resources and stop audio/video capture
             if (geminiSessionRef.current) {
                 await geminiSessionRef.current.close();
                 geminiSessionRef.current = null;
@@ -653,7 +614,6 @@ function setupGeminiIpcHandlers(geminiSessionRef) {
         }
     });
 
-    // Conversation history IPC handlers
     ipcMain.handle('get-current-session', async event => {
         try {
             return { success: true, data: getCurrentSessionData() };
@@ -676,8 +636,7 @@ function setupGeminiIpcHandlers(geminiSessionRef) {
     ipcMain.handle('update-google-search-setting', async (event, enabled) => {
         try {
             console.log('Google Search setting updated to:', enabled);
-            // The setting is already saved in localStorage by the renderer
-            // This is just for logging/confirmation
+
             return { success: true };
         } catch (error) {
             console.error('Error updating Google Search setting:', error);

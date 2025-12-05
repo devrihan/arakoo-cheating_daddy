@@ -1,10 +1,3 @@
-// src/utils/renderer.js
-
-// ----------------------------------------------------------------------
-// 1. IPC & Environment Setup
-// ----------------------------------------------------------------------
-
-// Safe access to Electron's IPC renderer and OS module
 const electron = window.require ? window.require('electron') : null;
 const os = window.require ? window.require('os') : null;
 
@@ -16,7 +9,6 @@ const ipcRenderer = electron
           removeAllListeners: () => {},
       };
 
-// Initialize random display name for UI components
 window.randomDisplayName = null;
 ipcRenderer
     .invoke('get-random-display-name')
@@ -29,36 +21,24 @@ ipcRenderer
         window.randomDisplayName = 'System Monitor';
     });
 
-// ----------------------------------------------------------------------
-// 2. Global State & Constants
-// ----------------------------------------------------------------------
-
 let mediaStream = null;
 let screenshotInterval = null;
 let audioContext = null;
 let audioProcessor = null;
 let micAudioProcessor = null;
 
-// Audio Configuration
 const SAMPLE_RATE = 24000;
-const AUDIO_CHUNK_DURATION = 0.1; // seconds
+const AUDIO_CHUNK_DURATION = 0.1;
 const BUFFER_SIZE = 4096;
 
-// Video/Canvas for screenshots
 let hiddenVideo = null;
 let offscreenCanvas = null;
 let offscreenContext = null;
 let currentImageQuality = 'medium';
 
-// ROBUST PLATFORM DETECTION
-// usage of os.platform() is much safer than navigator.userAgent
 const platform = os ? os.platform() : 'unknown';
 const isMacOS = platform === 'darwin';
 const isLinux = platform === 'linux';
-
-// ----------------------------------------------------------------------
-// 3. Helper Functions
-// ----------------------------------------------------------------------
 
 function convertFloat32ToInt16(float32Array) {
     const int16Array = new Int16Array(float32Array.length);
@@ -79,10 +59,6 @@ function arrayBufferToBase64(buffer) {
     }
     return btoa(binary);
 }
-
-// ----------------------------------------------------------------------
-// 4. Token Tracker (Rate Limiting)
-// ----------------------------------------------------------------------
 
 const tokenTracker = {
     tokens: [],
@@ -143,12 +119,7 @@ const tokenTracker = {
     },
 };
 
-// Start tracking audio tokens loop
 setInterval(() => tokenTracker.trackAudioTokens(), 2000);
-
-// ----------------------------------------------------------------------
-// 5. Audio Processing Setup
-// ----------------------------------------------------------------------
 
 function setupMicProcessing(micStream) {
     const micAudioContext = new AudioContext({ sampleRate: SAMPLE_RATE });
@@ -207,21 +178,15 @@ function setupSystemAudioProcessing(stream) {
     audioProcessor.connect(audioContext.destination);
 }
 
-// ----------------------------------------------------------------------
-// 6. Capture Logic (Screen & Audio)
-// ----------------------------------------------------------------------
-
 async function startCaptureInternal(screenshotIntervalSeconds = 5, imageQuality = 'medium') {
     currentImageQuality = imageQuality;
     tokenTracker.reset();
 
-    // Notify UI that we are live
     window.dispatchEvent(new CustomEvent('status-update', { detail: 'Live' }));
 
     const audioMode = localStorage.getItem('audioMode') || 'speaker_only';
 
     try {
-        // --- macOS Specifics ---
         if (isMacOS) {
             console.log('Starting macOS capture...');
             const audioResult = await ipcRenderer.invoke('start-macos-audio');
@@ -234,7 +199,6 @@ async function startCaptureInternal(screenshotIntervalSeconds = 5, imageQuality 
                 audio: false,
             });
 
-            // Microphone handling for macOS
             if (audioMode === 'mic_only' || audioMode === 'both') {
                 try {
                     const micStream = await navigator.mediaDevices.getUserMedia({
@@ -246,23 +210,19 @@ async function startCaptureInternal(screenshotIntervalSeconds = 5, imageQuality 
                     console.warn('Mic access failed:', err);
                 }
             }
-
-            // --- Linux/Windows Specifics ---
         } else {
             console.log('Starting Linux/Windows capture...');
             try {
-                // Try getting system audio via getDisplayMedia
                 mediaStream = await navigator.mediaDevices.getDisplayMedia({
                     video: { frameRate: 1, width: { ideal: 1920 }, height: { ideal: 1080 } },
                     audio: {
                         sampleRate: SAMPLE_RATE,
                         channelCount: 1,
-                        echoCancellation: isLinux ? false : true, // Windows needs true for loopback
+                        echoCancellation: isLinux ? false : true,
                         autoGainControl: true,
                     },
                 });
 
-                // If we got audio tracks, set up processing
                 if (mediaStream.getAudioTracks().length > 0) {
                     setupSystemAudioProcessing(mediaStream);
                 }
@@ -274,7 +234,6 @@ async function startCaptureInternal(screenshotIntervalSeconds = 5, imageQuality 
                 });
             }
 
-            // Microphone handling
             if (audioMode === 'mic_only' || audioMode === 'both') {
                 try {
                     const micStream = await navigator.mediaDevices.getUserMedia({
@@ -288,11 +247,10 @@ async function startCaptureInternal(screenshotIntervalSeconds = 5, imageQuality 
             }
         }
 
-        // Start Screenshot Interval
         if (screenshotIntervalSeconds !== 'manual' && screenshotIntervalSeconds !== 'Manual') {
             const ms = parseInt(screenshotIntervalSeconds) * 1000;
             screenshotInterval = setInterval(() => captureScreenshot(imageQuality), ms);
-            setTimeout(() => captureScreenshot(imageQuality), 500); // Take one immediately
+            setTimeout(() => captureScreenshot(imageQuality), 500);
         } else {
             console.log('Manual mode: Automatic screenshots disabled.');
         }
@@ -306,13 +264,11 @@ async function startCaptureInternal(screenshotIntervalSeconds = 5, imageQuality 
 async function captureScreenshot(imageQuality = 'medium', isManual = false) {
     if (!mediaStream) return;
 
-    // Rate Limiting Check
     if (!isManual && tokenTracker.shouldThrottle()) {
         console.log('Skipping screenshot due to rate limits');
         return;
     }
 
-    // Initialize Video/Canvas if needed
     if (!hiddenVideo) {
         hiddenVideo = document.createElement('video');
         hiddenVideo.srcObject = mediaStream;
@@ -320,7 +276,6 @@ async function captureScreenshot(imageQuality = 'medium', isManual = false) {
         hiddenVideo.playsInline = true;
         await hiddenVideo.play();
 
-        // Wait for metadata
         if (hiddenVideo.readyState < 2) {
             await new Promise(r => (hiddenVideo.onloadedmetadata = r));
         }
@@ -333,10 +288,8 @@ async function captureScreenshot(imageQuality = 'medium', isManual = false) {
 
     if (hiddenVideo.readyState < 2) return;
 
-    // Draw frame
     offscreenContext.drawImage(hiddenVideo, 0, 0, offscreenCanvas.width, offscreenCanvas.height);
 
-    // Determine Quality
     let qualityValue = 0.7;
     if (imageQuality === 'high') qualityValue = 0.9;
     if (imageQuality === 'low') qualityValue = 0.5;
@@ -397,10 +350,6 @@ function stopCaptureInternal() {
     window.dispatchEvent(new CustomEvent('status-update', { detail: 'Idle' }));
 }
 
-// ----------------------------------------------------------------------
-// 7. IndexedDB (Conversation History)
-// ----------------------------------------------------------------------
-
 let conversationDB = null;
 
 const dbMethods = {
@@ -451,26 +400,16 @@ const dbMethods = {
     },
 };
 
-// Initialize DB immediately
 dbMethods.init().catch(console.error);
 
-// ----------------------------------------------------------------------
-// 8. Event Listeners (Main Process -> Renderer)
-// ----------------------------------------------------------------------
-
-// Forward status updates to React
 ipcRenderer.on('update-status', (event, status) => {
     window.dispatchEvent(new CustomEvent('status-update', { detail: status }));
 });
 
-// Forward AI responses to React
-// (Note: The main process should send 'update-response' events)
 ipcRenderer.on('update-response', (event, response) => {
-    // Dispatch to window so React can pick it up
     window.dispatchEvent(new CustomEvent('new-response', { detail: response }));
 });
 
-// Save conversation history automatically
 ipcRenderer.on('save-conversation-turn', async (event, data) => {
     try {
         await dbMethods.saveSession(data.sessionId, data.fullHistory);
@@ -480,19 +419,13 @@ ipcRenderer.on('save-conversation-turn', async (event, data) => {
     }
 });
 
-// Emergency data clear
 ipcRenderer.on('clear-sensitive-data', () => {
     localStorage.removeItem('apiKey');
     localStorage.removeItem('customPrompt');
     window.location.reload();
 });
 
-// ----------------------------------------------------------------------
-// 9. Exported Service API
-// ----------------------------------------------------------------------
-
 export const rendererService = {
-    // Initialize session with API key
     initializeGemini: async (apiKey, profile = 'interview', language = 'en-US') => {
         const customPrompt = localStorage.getItem('customPrompt') || '';
         const success = await ipcRenderer.invoke('initialize-gemini', apiKey, customPrompt, profile, language);
@@ -502,44 +435,36 @@ export const rendererService = {
         return success;
     },
 
-    // Start Screen/Audio Capture
     startCapture: async (interval, quality) => {
         return startCaptureInternal(interval, quality);
     },
 
-    // Stop Capture
     stopCapture: () => {
         stopCaptureInternal();
     },
 
-    // Manual Trigger
     captureManualScreenshot: async () => {
         console.log('Manual screenshot triggered');
         await captureScreenshot(currentImageQuality, true);
 
-        // Send a specific prompt for manual help
         await rendererService.sendTextMessage(`Help me on this page, give me the answer no bs, complete answer.
         So if its a code question, give me the approach in few bullet points, then the entire code.
         If its a question about the website, give me the answer no bs.
         If its a mcq question, give me the answer no bs.`);
     },
 
-    // Send Text Message
     sendTextMessage: async text => {
         if (!text?.trim()) return { success: false };
         return await ipcRenderer.invoke('send-text-message', text);
     },
 
-    // Database Access
     getAllSessions: () => dbMethods.getAll(),
 
-    // Settings Helpers
     getContentProtection: () => {
         const val = localStorage.getItem('contentProtection');
         return val !== null ? val === 'true' : true;
     },
 
-    // Check platform
     isMacOS: () => isMacOS,
     isLinux: () => isLinux,
 };
